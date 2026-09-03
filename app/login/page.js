@@ -20,7 +20,8 @@ export default function LoginPage() {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <h1>The Permit Closer</h1>
+        <h1>Majestic Permits</h1>
+        <p className="tag" style={{ marginTop: -8, marginBottom: 18 }}>Majestic Construction Permits LLC</p>
         <form onSubmit={handleLogin}>
           <div className="form-row">
             <label>Email</label>

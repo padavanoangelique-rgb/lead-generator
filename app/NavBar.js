@@ -29,7 +29,7 @@ export default function NavBar() {
 
   return (
     <header>
-      <h1>The Permit <span>Closer</span></h1>
+      <h1>Majestic <span>Permits</span><small>Majestic Construction Permits LLC</small></h1>
       <nav className="top-nav no-print">
         {tabs.map(t => (
           <a key={t.href} href={t.href} className={pathname === t.href ? 'active' : ''}>{t.label}</a>

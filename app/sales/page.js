@@ -3,13 +3,17 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 
+function todayIso() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
 export default function SalesPage() {
   const router = useRouter();
   const [session, setSession] = useState(null);
   const [sales, setSales] = useState([]);
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [txnModal, setTxnModal] = useState(null); // { sale }
+  const [txnModal, setTxnModal] = useState(null);
   const [txnForm, setTxnForm] = useState({ type: 'income', category: '', amount: '', description: '', txn_date: '' });
 
   useEffect(() => {
@@ -38,7 +42,7 @@ export default function SalesPage() {
 
   async function openTxnModal(sale) {
     setTxnModal(sale);
-    setTxnForm({ type: 'income', category: 'Job Payment', amount: '', description: sale.job_name, txn_date: new Date().toISOString().slice(0, 10) });
+    setTxnForm({ type: 'income', category: 'Job Payment', amount: '', description: sale.job_name, txn_date: todayIso() });
   }
 
   async function saveTxn() {
@@ -51,6 +55,7 @@ export default function SalesPage() {
       txn_date: txnForm.txn_date,
     });
     setTxnModal(null);
+    loadData();
   }
 
   if (!session) return null;
@@ -75,7 +80,6 @@ export default function SalesPage() {
         <div className="stat"><div className="num">{totals.completed}</div><div className="label">Completed</div></div>
         <div className="stat"><div className="num">${totals.value.toLocaleString()}</div><div className="label">Total Job Value</div></div>
       </div>
-
       <div className="panel">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2 style={{ marginBottom: 0 }}>Sales</h2>
@@ -115,7 +119,6 @@ export default function SalesPage() {
           </table>
         </div>
       </div>
-
       {txnModal && (
         <div className="modal-overlay" onClick={() => setTxnModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>

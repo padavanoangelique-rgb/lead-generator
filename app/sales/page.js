@@ -15,6 +15,7 @@ export default function SalesPage() {
   const [editingId, setEditingId] = useState(null);
   const [txnModal, setTxnModal] = useState(null);
   const [txnForm, setTxnForm] = useState({ type: 'income', category: '', amount: '', description: '', txn_date: '' });
+  const [hubBusy, setHubBusy] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -29,7 +30,7 @@ export default function SalesPage() {
   }, [router]);
 
   const loadData = useCallback(async () => {
-    const { data } = await supabase.from('sales').select('*, leads(name, address, permit_number)').order('converted_date', { ascending: false });
+    const { data } = await supabase.from('sales').select('*, leads(name, address, permit_number, permit_type, email, contact, county, notes)').order('converted_date', { ascending: false });
     setSales(data || []);
   }, []);
 
@@ -56,6 +57,46 @@ export default function SalesPage() {
     });
     setTxnModal(null);
     loadData();
+  }
+
+  function alreadyOnHub(sale) {
+    return (sale.notes || '').includes('hub.majesticpermits.com/admin/jobs/');
+  }
+
+  async function sendToHub(sale) {
+    const lead = sale.leads || {};
+    setHubBusy(sale.id);
+    try {
+      const res = await fetch('/api/send-to-hub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: lead.name || sale.job_name,
+          address: lead.address || '',
+          email: lead.email || '',
+          phone: lead.contact || '',
+          permit_number: lead.permit_number || '',
+          permit_type: lead.permit_type || '',
+          county: lead.county || '',
+          notes: lead.notes || '',
+          job_value: sale.job_value || 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.id) {
+        alert(data.error || 'Could not create Hub job');
+        return;
+      }
+      await supabase.from('sales').update({
+        notes: `Hub job: https://hub.majesticpermits.com/admin/jobs/${data.id}`,
+      }).eq('id', sale.id);
+      window.open(`https://hub.majesticpermits.com/admin/jobs/${data.id}`, '_blank');
+      loadData();
+    } catch (err) {
+      alert('Hub request failed: ' + err.message);
+    } finally {
+      setHubBusy(null);
+    }
   }
 
   if (!session) return null;
@@ -85,6 +126,7 @@ export default function SalesPage() {
           <h2 style={{ marginBottom: 0 }}>Sales</h2>
           <input style={{ marginBottom: 0, width: 220 }} placeholder="Search jobs..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <p className="sub">Convert a lead first, then Send to Hub to open it as a job on hub.majesticpermits.com.</p>
         <div style={{ overflowX: 'auto', marginTop: 14 }}>
           <table>
             <thead>
@@ -94,7 +136,7 @@ export default function SalesPage() {
               {visible.map(sale => (
                 <tr key={sale.id}>
                   <td>{sale.job_name}</td>
-                  <td>{sale.leads?.address || '—'}</td>
+                  <td>{sale.leads?.address || '\u2014'}</td>
                   <td>
                     {editingId === sale.id ? (
                       <input type="number" defaultValue={sale.job_value} style={{ width: 100, marginBottom: 0 }}
@@ -111,10 +153,19 @@ export default function SalesPage() {
                       <option value="lost">Lost</option>
                     </select>
                   </td>
-                  <td><button className="btn-outline btn-sm" onClick={() => openTxnModal(sale)}>Log Payment</button></td>
+                  <td className="row" style={{ gap: 6 }}>
+                    <button className="btn-outline btn-sm" onClick={() => openTxnModal(sale)}>Log Payment</button>
+                    {alreadyOnHub(sale) ? (
+                      <a className="btn-outline btn-sm" href={(sale.notes || '').replace('Hub job: ', '')} target="_blank" rel="noreferrer">Open Hub</a>
+                    ) : (
+                      <button className="btn-gold btn-sm" disabled={hubBusy === sale.id} onClick={() => sendToHub(sale)}>
+                        {hubBusy === sale.id ? 'Sending\u2026' : 'Send to Hub'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
-              {visible.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>No sales yet — convert a lead from the Lead Generator tab.</td></tr>}
+              {visible.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>No sales yet \u2014 convert a lead from the Lead Generator tab.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -122,7 +173,7 @@ export default function SalesPage() {
       {txnModal && (
         <div className="modal-overlay" onClick={() => setTxnModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>Log Payment / Cost — {txnModal.job_name}</h3>
+            <h3>Log Payment / Cost \u2014 {txnModal.job_name}</h3>
             <div className="form-row">
               <label>Type</label>
               <select value={txnForm.type} onChange={e => setTxnForm({ ...txnForm, type: e.target.value })}>

@@ -1,5 +1,8 @@
-/* Majestic Construction Permits LLC — black + lime */
-:root {
+/* Majestic Construction Permits LLC
+   Dark (default) = black + lime
+   Light          = white + blue */
+:root,
+html[data-theme="dark"] {
   --navy: #000000;
   --navy-light: #161616;
   --gold: #b6ff2a;
@@ -14,6 +17,22 @@
   --due-bg: rgba(255, 92, 74, 0.16); --due-text: #ff8a75;
   --pending-bg: rgba(182, 255, 42, 0.10); --pending-text: #d4ff6a;
   --sale-bg: rgba(182, 255, 42, 0.14); --sale-text: #b6ff2a;
+}
+html[data-theme="light"] {
+  --navy: #156cdd;
+  --navy-light: #f2f6fc;
+  --gold: #156cdd;
+  --gold-light: #1157b8;
+  --bg: #ffffff;
+  --card: #ffffff;
+  --border: #dedede;
+  --text: #0a0a0a;
+  --text-muted: #585858;
+  --danger: #ff5c4a;
+  --success: #156cdd;
+  --due-bg: rgba(255, 92, 74, 0.12); --due-text: #c0392b;
+  --pending-bg: rgba(21, 108, 221, 0.08); --pending-text: #156cdd;
+  --sale-bg: rgba(21, 108, 221, 0.10); --sale-text: #156cdd;
 }
 * { box-sizing: border-box; }
 body {
@@ -46,6 +65,7 @@ button {
 button:hover { transform: translateY(-1px); opacity: 0.92; }
 button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 .btn-gold { background: var(--gold); color: #000; }
+html[data-theme="light"] .btn-gold { color: #fff; }
 .btn-outline { background: transparent; color: var(--text); border: 1.5px solid var(--border); }
 .btn-outline:hover { border-color: var(--gold); color: var(--gold); }
 .btn-navy { background: var(--navy-light); color: var(--text); border: 1.5px solid var(--border); }
@@ -53,8 +73,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 .btn-sm { padding: 6px 11px; font-size: 12px; }
 
 header {
-  background: #000;
-  color: #fff;
+  background: var(--card);
+  color: var(--text);
   padding: 18px 24px;
   display: flex;
   align-items: center;
@@ -63,6 +83,7 @@ header {
   gap: 12px;
   border-bottom: 1px solid var(--border);
 }
+html[data-theme="dark"] header { background: #000; color: #fff; }
 header h1 { margin: 0; font-size: 20px; text-transform: uppercase; }
 header h1 span { color: var(--gold); }
 header h1 small {
@@ -77,6 +98,7 @@ header h1 small {
 }
 .top-nav a:hover { color: var(--text); background: var(--navy-light); }
 .top-nav a.active { color: #000; background: var(--gold); }
+html[data-theme="light"] .top-nav a.active { color: #fff; }
 
 main { padding: 20px 24px 60px; max-width: 1200px; margin: 0 auto; }
 
@@ -90,6 +112,7 @@ main { padding: 20px 24px 60px; max-width: 1200px; margin: 0 auto; }
 }
 .audience-tab:hover { color: var(--text); border-color: var(--border); }
 .audience-tab.active { background: var(--gold); color: #000; }
+html[data-theme="light"] .audience-tab.active { color: #fff; }
 
 .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
 @media (max-width: 700px) { .stats-bar { grid-template-columns: 1fr 1fr; } }
@@ -132,15 +155,15 @@ tr:hover td { background: var(--navy-light); }
 
 .upload-box {
   border: 1.5px dashed var(--gold); border-radius: 4px; padding: 30px 16px; text-align: center; color: var(--gold-light);
-  cursor: pointer; background: rgba(182, 255, 42, 0.05); font-size: 14px; font-weight: 600;
+  cursor: pointer; background: color-mix(in srgb, var(--gold) 6%, transparent); font-size: 14px; font-weight: 600;
 }
-.upload-box:hover, .upload-box.dragover { background: rgba(182, 255, 42, 0.12); }
+.upload-box:hover, .upload-box.dragover { background: color-mix(in srgb, var(--gold) 12%, transparent); }
 .file-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 8px 12px; font-size: 13px; margin-top: 12px; font-family: 'IBM Plex Mono', monospace; }
 
 .status-msg { font-size: 13.5px; margin-top: 10px; padding: 10px 12px; border-radius: 3px; font-weight: 500; border-left: 3px solid; }
 .status-msg.ok { background: var(--sale-bg); color: var(--sale-text); border-color: var(--sale-text); }
 .status-msg.err { background: var(--due-bg); color: var(--due-text); border-color: var(--due-text); }
-.status-msg.info { background: rgba(182, 255, 42, 0.08); color: var(--gold-light); border-color: var(--gold); }
+.status-msg.info { background: color-mix(in srgb, var(--gold) 8%, transparent); color: var(--gold-light); border-color: var(--gold); }
 
 .tag { font-size: 13px; color: var(--text-muted); }
 
@@ -149,7 +172,7 @@ tr:hover td { background: var(--navy-light); }
 .modal h3 { margin-top: 0; color: var(--gold-light); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
-.login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #000; }
+.login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
 .login-card { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 32px; width: 360px; max-width: 92vw; }
 .login-card h1 { color: var(--gold); margin-top: 0; }
 .form-row { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }

@@ -1,5 +1,6 @@
 import './globals.css';
 import NavBar from './NavBar';
+import ThemeSync from './theme-sync';
 
 export const metadata = {
   title: 'Majestic Construction Permits LLC — Lead Generator',
@@ -8,7 +9,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -19,6 +20,7 @@ export default function RootLayout({ children }) {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
       </head>
       <body>
+        <ThemeSync />
         <NavBar />
         {children}
       </body>

@@ -8,10 +8,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [show, setShow] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (isEmbedded()) router.replace('/');
+    if (isEmbedded()) {
+      router.replace('/?embed=1');
+      return;
+    }
+    setShow(true);
   }, [router]);
 
   async function handleLogin(e) {
@@ -21,6 +26,8 @@ export default function LoginPage() {
     if (error) { setError(error.message); return; }
     router.push('/');
   }
+
+  if (!show) return null;
 
   return (
     <div className="login-wrap">

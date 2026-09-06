@@ -2,10 +2,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
+import { isEmbedded } from '../../lib/unlock';
 
 function monthKey(dateStr) {
   if (!dateStr) return null;
-  return dateStr.slice(0, 7); // YYYY-MM
+  return dateStr.slice(0, 7);
 }
 function monthLabel(key) {
   const [y, m] = key.split('-');
@@ -23,6 +24,10 @@ export default function FinancesPage() {
   const [rateInput, setRateInput] = useState('0.78');
 
   useEffect(() => {
+    if (isEmbedded()) {
+      setSession({ embedded: true });
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (!data.session) router.push('/login');
@@ -72,7 +77,6 @@ export default function FinancesPage() {
 
   if (!session) return null;
 
-  // ---------- Postage: count letters sent per month across all 3 notice stages ----------
   const postageByMonth = {};
   leads.forEach(l => {
     [l.first_notice_date, l.second_notice_date, l.third_notice_date].forEach(d => {
@@ -81,8 +85,6 @@ export default function FinancesPage() {
     });
   });
   const postageMonths = Object.keys(postageByMonth).sort().reverse();
-
-  // ---------- Ledger totals ----------
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
   const totalPostageCost = postageMonths.reduce((s, k) => s + postageByMonth[k] * settings.postage_rate, 0);
@@ -94,10 +96,8 @@ export default function FinancesPage() {
         <div className="card expense"><div className="num">${totalExpense.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div><div className="label">Total Money Out</div></div>
         <div className="card"><div className="num">${(totalIncome - totalExpense).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div><div className="label">Net</div></div>
       </div>
-
       <div className="panel">
         <h2>Postage — Letters Sent by Month</h2>
-        <p className="sub">Automatically counted from every First, Second, and Third notice printed. Cost = letters × postage rate (not added to the ledger automatically — this is a running estimate).</p>
         <div className="row" style={{ marginBottom: 14 }}>
           <label style={{ marginBottom: 0 }}>Postage rate per letter ($)</label>
           <input type="number" step="0.01" value={rateInput} onChange={e => setRateInput(e.target.value)} style={{ width: 100, marginBottom: 0 }} />
@@ -115,18 +115,8 @@ export default function FinancesPage() {
             ))}
             {postageMonths.length === 0 && <tr><td colSpan={3} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>No letters sent yet.</td></tr>}
           </tbody>
-          {postageMonths.length > 0 && (
-            <tfoot>
-              <tr style={{ fontWeight: 700 }}>
-                <td>Total</td>
-                <td>{postageMonths.reduce((s, k) => s + postageByMonth[k], 0)}</td>
-                <td>${totalPostageCost.toFixed(2)}</td>
-              </tr>
-            </tfoot>
-          )}
         </table>
       </div>
-
       <div className="panel">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2 style={{ marginBottom: 0 }}>Ledger — Money In / Money Out</h2>
@@ -142,7 +132,7 @@ export default function FinancesPage() {
                   <option value="expense">Money Out (expense)</option>
                 </select>
                 <label>Category</label>
-                <input value={txnForm.category} onChange={e => setTxnForm({ ...txnForm, category: e.target.value })} placeholder="Postage, Supplies, Job Payment..." />
+                <input value={txnForm.category} onChange={e => setTxnForm({ ...txnForm, category: e.target.value })} />
               </div>
               <div>
                 <label>Amount ($)</label>
@@ -156,24 +146,21 @@ export default function FinancesPage() {
             <button className="btn-gold" onClick={saveTxn}>Save Transaction</button>
           </div>
         )}
-        <div style={{ overflowX: 'auto', marginTop: 14 }}>
-          <table>
-            <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead>
-            <tbody>
-              {transactions.map(t => (
-                <tr key={t.id}>
-                  <td>{t.txn_date}</td>
-                  <td><span className={`badge ${t.type}`}>{t.type === 'income' ? 'In' : 'Out'}</span></td>
-                  <td>{t.category}</td>
-                  <td>{t.description}</td>
-                  <td>${Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td><button className="btn-outline btn-sm" onClick={() => deleteTxn(t.id)}>Delete</button></td>
-                </tr>
-              ))}
-              {transactions.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>No transactions logged yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead>
+          <tbody>
+            {transactions.map(t => (
+              <tr key={t.id}>
+                <td>{t.txn_date}</td>
+                <td><span className={`badge ${t.type}`}>{t.type === 'income' ? 'In' : 'Out'}</span></td>
+                <td>{t.category}</td>
+                <td>{t.description}</td>
+                <td>${Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td><button className="btn-outline btn-sm" onClick={() => deleteTxn(t.id)}>Delete</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </main>
   );

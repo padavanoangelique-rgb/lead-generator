@@ -115,7 +115,10 @@ Leads table) — no email or text is sent automatically.
 ## 5. Verify everything works
 
 1. Visit your site — it should land on the login page.
-2. Log in with a staff account from step 1.
+   **Exception:** opened from admin.majesticpermits.com (Lead generator /
+   Sales / Books) it skips this login — admin sign-in is enough.
+2. Log in with a staff account from step 1 only if you opened the app on
+   its own URL (not inside the admin dashboard).
 3. On the **Homeowners** tab: add one test lead manually, print it, confirm
    the PDF looks right (address in the envelope window, QR code scans to
    thepermitcloser.com).

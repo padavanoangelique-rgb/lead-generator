@@ -19,13 +19,17 @@ export default function SalesPage() {
   const [hubBusy, setHubBusy] = useState(null);
 
   useEffect(() => {
+    if (isEmbedded()) {
+      setSession({ embedded: true });
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (!data.session) router.push(isEmbedded() ? '/login?embed=1' : '/login');
+      if (!data.session) router.push('/login');
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
       setSession(sess);
-      if (!sess) router.push(isEmbedded() ? '/login?embed=1' : '/login');
+      if (!sess) router.push('/login');
     });
     return () => sub.subscription.unsubscribe();
   }, [router]);

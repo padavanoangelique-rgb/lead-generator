@@ -12,9 +12,13 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
+    if (isEmbedded()) {
+      router.replace('/?embed=1');
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
-        router.replace(isEmbedded() ? '/?embed=1' : '/');
+        router.replace('/');
         return;
       }
       setShow(true);
@@ -26,7 +30,7 @@ export default function LoginPage() {
     setError('');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); return; }
-    router.push(isEmbedded() ? '/?embed=1' : '/');
+    router.push('/');
   }
 
   if (!show) return null;

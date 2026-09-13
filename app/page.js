@@ -6,8 +6,9 @@ import { drawNoticeLetter, leadToLetterData } from '../lib/pdfLetters';
 import { PARTNER_AUDIENCES, drawPartnerLetter, leadToPartnerLetterData } from '../lib/partnerLetters';
 import { normalizeImportRows } from '../lib/leadImport';
 import { getEmailTemplate, leadsToMailchimpCsv } from '../lib/emailContent';
-import { saveLeads, updateLead, insertSale } from '../lib/leadApi';
+import { saveLeads, updateLead, insertSale, listLeads } from '../lib/leadApi';
 import { isEmbedded } from '../lib/unlock';
+import { DESK_SESSION } from '../lib/deskAuth';
 
 const COUNTIES = ['Palm Beach County', 'Broward County', 'Miami-Dade County', 'Martin County'];
 
@@ -103,20 +104,38 @@ export default function LeadsPage() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    let unsub = () => {};
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (!data.session) router.push(isEmbedded() ? '/login?embed=1' : '/login');
+      if (data.session) {
+        setSession(data.session);
+        return;
+      }
+      if (isEmbedded()) {
+        setSession(DESK_SESSION);
+        return;
+      }
+      router.push('/login');
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
-      setSession(sess);
-      if (!sess) router.push(isEmbedded() ? '/login?embed=1' : '/login');
-    });
-    return () => sub.subscription.unsubscribe();
+    if (!isEmbedded()) {
+      const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
+        setSession(sess);
+        if (!sess) router.push('/login');
+      });
+      unsub = () => sub.subscription.unsubscribe();
+    }
+    return unsub;
   }, [router]);
 
   const loadData = useCallback(async () => {
     const { data: leadRows } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
-    setLeads(leadRows || []);
+    let rows = leadRows || [];
+    if (!rows.length) {
+      try {
+        const listed = await listLeads();
+        if (listed.length) rows = listed;
+      } catch {}
+    }
+    setLeads(rows);
     const { data: s } = await supabase.from('app_settings').select('*').eq('id', 1).single();
     if (s) setSettings(s);
   }, []);

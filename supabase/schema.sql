@@ -93,11 +93,11 @@ alter table sales enable row level security;
 alter table transactions enable row level security;
 alter table app_settings enable row level security;
 
-grant usage on schema public to authenticated;
-grant select, insert, update, delete on table leads to authenticated;
-grant select, insert, update, delete on table sales to authenticated;
-grant select, insert, update, delete on table transactions to authenticated;
-grant select, insert, update, delete on table app_settings to authenticated;
+grant usage on schema public to authenticated, anon;
+grant select, insert, update, delete on table leads to authenticated, anon;
+grant select, insert, update, delete on table sales to authenticated, anon;
+grant select, insert, update, delete on table transactions to authenticated, anon;
+grant select, insert, update, delete on table app_settings to authenticated, anon;
 
 drop policy if exists "authenticated read leads" on leads;
 drop policy if exists "authenticated write leads" on leads;
@@ -105,10 +105,10 @@ drop policy if exists "staff read leads" on leads;
 drop policy if exists "staff insert leads" on leads;
 drop policy if exists "staff update leads" on leads;
 drop policy if exists "staff delete leads" on leads;
-create policy "staff read leads" on leads for select to authenticated using (true);
-create policy "staff insert leads" on leads for insert to authenticated with check (true);
-create policy "staff update leads" on leads for update to authenticated using (true) with check (true);
-create policy "staff delete leads" on leads for delete to authenticated using (true);
+create policy "staff read leads" on leads for select to authenticated, anon using (true);
+create policy "staff insert leads" on leads for insert to authenticated, anon with check (true);
+create policy "staff update leads" on leads for update to authenticated, anon using (true) with check (true);
+create policy "staff delete leads" on leads for delete to authenticated, anon using (true);
 
 drop policy if exists "authenticated read sales" on sales;
 drop policy if exists "authenticated write sales" on sales;
@@ -116,10 +116,10 @@ drop policy if exists "staff read sales" on sales;
 drop policy if exists "staff insert sales" on sales;
 drop policy if exists "staff update sales" on sales;
 drop policy if exists "staff delete sales" on sales;
-create policy "staff read sales" on sales for select to authenticated using (true);
-create policy "staff insert sales" on sales for insert to authenticated with check (true);
-create policy "staff update sales" on sales for update to authenticated using (true) with check (true);
-create policy "staff delete sales" on sales for delete to authenticated using (true);
+create policy "staff read sales" on sales for select to authenticated, anon using (true);
+create policy "staff insert sales" on sales for insert to authenticated, anon with check (true);
+create policy "staff update sales" on sales for update to authenticated, anon using (true) with check (true);
+create policy "staff delete sales" on sales for delete to authenticated, anon using (true);
 
 drop policy if exists "authenticated read transactions" on transactions;
 drop policy if exists "authenticated write transactions" on transactions;
@@ -127,17 +127,17 @@ drop policy if exists "staff read transactions" on transactions;
 drop policy if exists "staff insert transactions" on transactions;
 drop policy if exists "staff update transactions" on transactions;
 drop policy if exists "staff delete transactions" on transactions;
-create policy "staff read transactions" on transactions for select to authenticated using (true);
-create policy "staff insert transactions" on transactions for insert to authenticated with check (true);
-create policy "staff update transactions" on transactions for update to authenticated using (true) with check (true);
-create policy "staff delete transactions" on transactions for delete to authenticated using (true);
+create policy "staff read transactions" on transactions for select to authenticated, anon using (true);
+create policy "staff insert transactions" on transactions for insert to authenticated, anon with check (true);
+create policy "staff update transactions" on transactions for update to authenticated, anon using (true) with check (true);
+create policy "staff delete transactions" on transactions for delete to authenticated, anon using (true);
 
 drop policy if exists "authenticated read settings" on app_settings;
 drop policy if exists "authenticated write settings" on app_settings;
 drop policy if exists "staff read settings" on app_settings;
 drop policy if exists "staff write settings" on app_settings;
-create policy "staff read settings" on app_settings for select to authenticated using (true);
-create policy "staff write settings" on app_settings for all to authenticated using (true) with check (true);
+create policy "staff read settings" on app_settings for select to authenticated, anon using (true);
+create policy "staff write settings" on app_settings for all to authenticated, anon using (true) with check (true);
 
 -- To add a column later, run something like this as its own snippet:
 --   ALTER TABLE leads ADD COLUMN IF NOT EXISTS some_new_field text default '';

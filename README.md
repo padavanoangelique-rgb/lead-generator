@@ -76,8 +76,8 @@ Leads table) — no email or text is sent automatically.
 3. **Project Settings** → **API** (sometimes labeled "Data API") → copy the
    **Project URL**.
 4. **Project Settings** → **API Keys** → copy the `sb_publishable_...` key
-   (or the older `anon` `public` key if that's what you see). **Never** use
-   the `sb_secret_...` / `service_role` key in this app.
+   (or the older `anon` `public` key if that's what you see). Also copy the
+   `service_role` / `sb_secret_...` key — that one is **server-only**.
 5. **Authentication** → **Users** → **Add user** → create one login
    (email + password) for yourself and each staff member who needs access.
    There's no public sign-up page by design.
@@ -95,6 +95,9 @@ Leads table) — no email or text is sent automatically.
 2. Before deploying, add environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL` = the Project URL from step 1
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = the publishable/anon key from step 1
+   - `SUPABASE_SERVICE_ROLE_KEY` = the `service_role` / `sb_secret_...` key
+     from step 1 (server-only; this is what lets Save Leads bypass a stuck
+     row-level security policy)
    - (Settings → Environments → Production row → Environment Variables, if
      you're adding these after the first deploy instead of during setup.)
 3. Deploy. If the build fails, check **Settings → Build and Deployment →

@@ -24,17 +24,13 @@ export default function FinancesPage() {
   const [rateInput, setRateInput] = useState('0.78');
 
   useEffect(() => {
-    if (isEmbedded()) {
-      setSession({ embedded: true });
-      return;
-    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (!data.session) router.push('/login');
+      if (!data.session) router.push(isEmbedded() ? '/login?embed=1' : '/login');
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
       setSession(sess);
-      if (!sess) router.push('/login');
+      if (!sess) router.push(isEmbedded() ? '/login?embed=1' : '/login');
     });
     return () => sub.subscription.unsubscribe();
   }, [router]);

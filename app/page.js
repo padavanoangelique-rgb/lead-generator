@@ -6,6 +6,8 @@ import { drawNoticeLetter, leadToLetterData } from '../lib/pdfLetters';
 import { PARTNER_AUDIENCES, drawPartnerLetter, leadToPartnerLetterData } from '../lib/partnerLetters';
 import { normalizeImportRows } from '../lib/leadImport';
 import { getEmailTemplate, leadsToMailchimpCsv } from '../lib/emailContent';
+import { saveLeads, updateLead, insertSale } from '../lib/leadApi';
+import { isEmbedded } from '../lib/unlock';
 
 const COUNTIES = ['Palm Beach County', 'Broward County', 'Miami-Dade County', 'Martin County'];
 
@@ -103,11 +105,11 @@ export default function LeadsPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (!data.session) router.push('/login');
+      if (!data.session) router.push(isEmbedded() ? '/login?embed=1' : '/login');
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
       setSession(sess);
-      if (!sess) router.push('/login');
+      if (!sess) router.push(isEmbedded() ? '/login?embed=1' : '/login');
     });
     return () => sub.subscription.unsubscribe();
   }, [router]);
@@ -183,9 +185,20 @@ export default function LeadsPage() {
 
   // ---------- Manual entry ----------
   async function saveLead(fields) {
-    const { data, error } = await supabase.from('leads').insert(fields).select().single();
-    if (error) throw error;
-    return data;
+    const [row] = await saveLeads(fields);
+    if (!row) throw new Error('Lead did not save.');
+    return row;
+  }
+
+  function downloadLetters(leads, filename, mode) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'letter' });
+    leads.forEach((lead, i) => {
+      if (i > 0) doc.addPage();
+      drawLetterForLead(doc, lead, 1);
+    });
+    if (mode === 'print') { doc.autoPrint(); window.open(doc.output('bloburl'), '_blank'); }
+    else { doc.save(filename); }
   }
 
   async function generateSingle(mode) {
@@ -193,16 +206,22 @@ export default function LeadsPage() {
       setGenStatus({ type: 'err', text: 'Name and address are required.' });
       return;
     }
+    const payload = { ...form, audience: activeAudience, first_notice_date: todayIso(), status: 'pending' };
+    let lead = payload;
+    let saved = false;
     try {
-      const lead = await saveLead({ ...form, audience: activeAudience, first_notice_date: todayIso(), status: 'pending' });
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ unit: 'mm', format: 'letter' });
-      drawLetterForLead(doc, lead, 1);
-      if (mode === 'print') { doc.autoPrint(); window.open(doc.output('bloburl'), '_blank'); }
-      else { doc.save(`${lead.name.replace(/\s+/g, '_')}_first_notice.pdf`); }
-      setGenStatus({ type: 'ok', text: 'Letter generated and lead saved.' });
-      setForm(emptyFormFor(activeAudience));
-      loadData();
+      lead = await saveLead(payload);
+      saved = true;
+    } catch (err) {
+      setGenStatus({ type: 'err', text: 'Letter will still download. Save failed: ' + err.message });
+    }
+    try {
+      downloadLetters([lead], `${(lead.name || 'letter').replace(/\s+/g, '_')}_first_notice.pdf`, mode);
+      if (saved) {
+        setGenStatus({ type: 'ok', text: 'Letter generated and lead saved.' });
+        setForm(emptyFormFor(activeAudience));
+        loadData();
+      }
     } catch (err) {
       setGenStatus({ type: 'err', text: 'Error: ' + err.message });
     }
@@ -288,42 +307,56 @@ export default function LeadsPage() {
   async function generateBulk(mode) {
     const rows = bulkRows.filter(r => !r._dup);
     if (!rows.length) return;
-    try {
-      const today = todayIso();
-      const inserted = [];
-      for (const row of rows) {
-        const { _dup, ...fields } = row;
-        const lead = await saveLead(
-          mode === 'save-only'
-            ? { ...fields, audience: activeAudience }
-            : { ...fields, audience: activeAudience, first_notice_date: today }
-        );
-        inserted.push(lead);
-      }
-      const skipped = bulkRows.length - rows.length;
-      const skippedNote = skipped ? ` (${skipped} duplicate${skipped === 1 ? '' : 's'} skipped)` : '';
+    const today = todayIso();
+    const payload = rows.map(({ _dup, ...fields }) => (
+      mode === 'save-only'
+        ? { ...fields, audience: activeAudience, status: fields.status || 'pending' }
+        : { ...fields, audience: activeAudience, first_notice_date: today, status: fields.status || 'pending' }
+    ));
+    const skipped = bulkRows.length - rows.length;
+    const skippedNote = skipped ? ` (${skipped} duplicate${skipped === 1 ? '' : 's'} skipped)` : '';
 
-      if (mode === 'save-only') {
-        setBulkStatus({ type: 'ok', text: `${inserted.length} lead${inserted.length === 1 ? '' : 's'} saved${skippedNote}. Print their 1st notices any time from the Leads table below.` });
-      } else {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ unit: 'mm', format: 'letter' });
-        inserted.forEach((lead, i) => {
-          if (i > 0) doc.addPage();
-          drawLetterForLead(doc, lead, 1);
-        });
-        if (mode === 'print') { doc.autoPrint(); window.open(doc.output('bloburl'), '_blank'); }
-        else { doc.save(`bulk_first_notices_${today}.pdf`); }
-        setBulkStatus({ type: 'ok', text: `${inserted.length} letters ${mode === 'print' ? 'sent to print' : 'downloaded'} and leads saved${skippedNote}.` });
-      }
-      setBulkRows([]);
-      setFileName('');
-      setPasteText('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      loadData();
+    let saved = [];
+    let saveErr = null;
+    try {
+      saved = await saveLeads(payload);
     } catch (err) {
-      setBulkStatus({ type: 'err', text: 'Error: ' + err.message });
+      saveErr = err;
+      saved = payload;
     }
+
+    if (mode !== 'save-only') {
+      try {
+        downloadLetters(saved, `bulk_first_notices_${today}.pdf`, mode);
+      } catch (err) {
+        setBulkStatus({ type: 'err', text: 'Could not build PDFs: ' + err.message });
+        return;
+      }
+    }
+
+    if (saveErr) {
+      const letterNote = mode === 'save-only'
+        ? `${payload.length} lead${payload.length === 1 ? '' : 's'} ready, but not saved.`
+        : `${payload.length} letter${payload.length === 1 ? '' : 's'} ${mode === 'print' ? 'sent to print' : 'downloaded'}. Leads did not save.`;
+      setBulkStatus({
+        type: 'err',
+        text: `${letterNote} ${saveErr.message}`,
+        fixSql: saveErr.fixSql,
+        fixUrl: saveErr.fixUrl,
+      });
+      return;
+    }
+
+    if (mode === 'save-only') {
+      setBulkStatus({ type: 'ok', text: `${saved.length} lead${saved.length === 1 ? '' : 's'} saved${skippedNote}. Print their 1st notices any time from the Leads table below.` });
+    } else {
+      setBulkStatus({ type: 'ok', text: `${saved.length} letters ${mode === 'print' ? 'sent to print' : 'downloaded'} and leads saved${skippedNote}.` });
+    }
+    setBulkRows([]);
+    setFileName('');
+    setPasteText('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    loadData();
   }
 
   // ---------- Print a notice (1st for a saved-but-not-mailed lead, or 2nd/3rd follow-up) ----------
@@ -331,12 +364,15 @@ export default function LeadsPage() {
   async function printNotice(lead, level, mode) {
     try {
       const field = NOTICE_FIELD[level];
-      const { data: updated, error } = await supabase.from('leads')
-        .update({ [field]: todayIso() }).eq('id', lead.id).select().single();
-      if (error) throw error;
+      let updated = { ...lead, [field]: todayIso() };
+      try {
+        updated = await updateLead(lead.id, { [field]: todayIso() });
+      } catch (err) {
+        console.warn('Notice date did not save:', err.message);
+      }
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ unit: 'mm', format: 'letter' });
-      drawLetterForLead(doc, updated, level);
+      drawLetterForLead(doc, updated || lead, level);
       if (mode === 'print') { doc.autoPrint(); window.open(doc.output('bloburl'), '_blank'); }
       else { doc.save(`${lead.name.replace(/\s+/g, '_')}_notice_${level}.pdf`); }
       loadData();
@@ -354,19 +390,13 @@ export default function LeadsPage() {
       const today = todayIso();
       const updated = [];
       for (const lead of targets) {
-        const { data, error } = await supabase.from('leads')
-          .update({ first_notice_date: today }).eq('id', lead.id).select().single();
-        if (error) throw error;
-        updated.push(data);
+        let row = { ...lead, first_notice_date: today };
+        try {
+          row = await updateLead(lead.id, { first_notice_date: today });
+        } catch {}
+        updated.push(row);
       }
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ unit: 'mm', format: 'letter' });
-      updated.forEach((lead, i) => {
-        if (i > 0) doc.addPage();
-        drawLetterForLead(doc, lead, 1);
-      });
-      doc.autoPrint();
-      window.open(doc.output('bloburl'), '_blank');
+      downloadLetters(updated, `not_sent_${today}.pdf`, 'print');
       loadData();
     } catch (err) {
       alert('Error printing batch: ' + err.message);
@@ -377,7 +407,7 @@ export default function LeadsPage() {
   async function confirmConvert() {
     if (!convertLead) return;
     try {
-      await supabase.from('sales').insert({
+      await insertSale({
         lead_id: convertLead.id,
         job_name: convertLead.permit_number
           ? `${convertLead.name} — Permit #${convertLead.permit_number}`
@@ -386,7 +416,7 @@ export default function LeadsPage() {
         status: 'in_progress',
         converted_date: todayIso(),
       });
-      await supabase.from('leads').update({ status: 'converted' }).eq('id', convertLead.id);
+      await updateLead(convertLead.id, { status: 'converted' });
       setConvertLead(null);
       setJobValue('');
       loadData();
@@ -396,7 +426,12 @@ export default function LeadsPage() {
   }
 
   async function closeLead(lead) {
-    await supabase.from('leads').update({ status: 'closed' }).eq('id', lead.id);
+    try {
+      await updateLead(lead.id, { status: 'closed' });
+    } catch (err) {
+      alert('Error closing lead: ' + err.message);
+      return;
+    }
     loadData();
   }
 
@@ -573,7 +608,25 @@ export default function LeadsPage() {
           <button className="btn-gold" disabled={!bulkRows.filter(r => !r._dup).length} onClick={() => generateBulk('download')}>Save + Download All PDFs</button>
           <button className="btn-outline" disabled={!bulkRows.filter(r => !r._dup).length} onClick={() => generateBulk('print')}>Save + Print All</button>
         </div>
-        {bulkStatus && <div className={`status-msg ${bulkStatus.type}`}>{bulkStatus.text}</div>}
+        {bulkStatus && (
+          <div className={`status-msg ${bulkStatus.type}`}>
+            {bulkStatus.text}
+            {bulkStatus.fixUrl && (
+              <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                <a className="btn-gold btn-sm" href={bulkStatus.fixUrl} target="_blank" rel="noreferrer">Open Lead Generator database</a>
+                {bulkStatus.fixSql && (
+                  <button
+                    className="btn-outline btn-sm"
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(bulkStatus.fixSql)}
+                  >
+                    Copy SQL fix
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="panel">

@@ -1,6 +1,8 @@
+import {staffClient} from '../../../lib/staffAuth';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
+  try {await staffClient(req);} catch(e) {return Response.json({error:e.message},{status:e.status||401});}
   const secret = process.env.HUB_INGEST_SECRET || process.env.LEAD_INGEST_SECRET;
   const hubBase = (process.env.HUB_URL || 'https://hub.majesticpermits.com').replace(/\/$/, '');
 

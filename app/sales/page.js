@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase, getAccessToken } from '../../lib/supabaseClient';
 import { isEmbedded } from '../../lib/unlock';
 
 function todayIso() {
@@ -35,7 +35,7 @@ export default function SalesPage() {
   }, [router]);
 
   const loadData = useCallback(async () => {
-    const { data } = await supabase.from('sales').select('*, leads(name, address, permit_number, permit_type, email, contact, county, notes)').order('converted_date', { ascending: false });
+    const { data } = await supabase.from('sales').select('*, leads(name, address, permit_number, permit_type, email, contact, county, notes, audience)').order('converted_date', { ascending: false });
     setSales(data || []);
   }, []);
 
@@ -64,41 +64,49 @@ export default function SalesPage() {
     loadData();
   }
 
-  function alreadyOnHub(sale) {
-    return (sale.notes || '').includes('hub.majesticpermits.com/admin/jobs/');
+  function hubUrl(sale) {
+    if (sale.hub_job_id) {
+      return "https://hub.majesticpermits.com/admin/jobs/" + sale.hub_job_id;
+    }
+    const legacy = (sale.notes || "").match(/https:\/\/hub\.majesticpermits\.com\/admin\/jobs\/[\da-f-]{36}/i);
+    return legacy ? legacy[0] : null;
   }
 
   async function sendToHub(sale) {
     const lead = sale.leads || {};
-    setHubBusy(sale.id);
-    try {
-      const res = await fetch('/api/send-to-hub', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: lead.name || sale.job_name,
-          address: lead.address || '',
-          email: lead.email || '',
-          phone: lead.contact || '',
-          permit_number: lead.permit_number || '',
-          permit_type: lead.permit_type || '',
-          county: lead.county || '',
-          notes: lead.notes || '',
-          job_value: sale.job_value || 0,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.id) {
-        alert(data.error || 'Could not create Hub job');
+    if (lead.audience === "contractor_permitaio") {
+      alert("This is a PermitAIO software prospect. Use PermitAIO onboarding instead of creating a permit job.");
+      return;
+    }
+    let projectAddress = "";
+    if (lead.audience && lead.audience !== "homeowner") {
+      const entered = prompt("Enter the ACTUAL PROJECT PROPERTY ADDRESS. The lead's company mailing address must not be used as a permit job site:");
+      if (entered === null) return;
+      projectAddress = entered.trim();
+      if (projectAddress.length < 5) {
+        alert("A valid project property address is required.");
         return;
       }
-      await supabase.from('sales').update({
-        notes: `Hub job: https://hub.majesticpermits.com/admin/jobs/${data.id}`,
-      }).eq('id', sale.id);
-      window.open(`https://hub.majesticpermits.com/admin/jobs/${data.id}`, '_blank');
-      loadData();
+    }
+
+    setHubBusy(sale.id);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Sign in to your verified staff account first.");
+      const res = await fetch("/api/send-to-hub", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ sale_id: sale.id, project_address: projectAddress }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.id) {
+        throw new Error(data.error || "Could not create the Majestic job.");
+      }
+      if (data.warning) alert(data.warning);
+      window.open(data.url || ("https://hub.majesticpermits.com/admin/jobs/" + data.id), "_blank", "noopener,noreferrer");
+      await loadData();
     } catch (err) {
-      alert('Hub request failed: ' + err.message);
+      alert("Hub transfer failed: " + err.message);
     } finally {
       setHubBusy(null);
     }
@@ -160,8 +168,8 @@ export default function SalesPage() {
                   </td>
                   <td className="row" style={{ gap: 6 }}>
                     <button className="btn-outline btn-sm" onClick={() => openTxnModal(sale)}>Log Payment</button>
-                    {alreadyOnHub(sale) ? (
-                      <a className="btn-outline btn-sm" href={(sale.notes || '').replace('Hub job: ', '')} target="_blank" rel="noreferrer">Open Hub</a>
+                    {hubUrl(sale) ? (
+                      <a className="btn-outline btn-sm" href={hubUrl(sale)} target="_blank" rel="noreferrer">Open Hub</a>
                     ) : (
                       <button className="btn-gold btn-sm" disabled={hubBusy === sale.id} onClick={() => sendToHub(sale)}>
                         {hubBusy === sale.id ? 'Sending\u2026' : 'Send to Hub'}

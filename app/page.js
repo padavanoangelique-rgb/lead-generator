@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { drawNoticeLetter, leadToLetterData } from '../lib/pdfLetters';
 import { PARTNER_AUDIENCES, drawPartnerLetter, leadToPartnerLetterData } from '../lib/partnerLetters';
 import { normalizeImportRows } from '../lib/leadImport';
+import { flagDuplicateImportRows } from '../lib/leadDedup';
 import { getEmailTemplate, leadsToMailchimpCsv } from '../lib/emailContent';
 import { saveLeads, updateLead, insertSale, listLeads } from '../lib/leadApi';
 import { isEmbedded } from '../lib/unlock';
@@ -250,13 +251,19 @@ export default function LeadsPage() {
   // Flags rows that already exist in the active audience's leads (by permit number, or by
   // address when no permit number is given) so re-pulling the same list doesn't create duplicates.
   async function flagDuplicates(rows) {
-    const { data } = await supabase.from('leads').select('permit_number,address').eq('audience', activeAudience);
-    const existingPermits = new Set((data || []).map(d => d.permit_number).filter(Boolean));
-    const existingAddrs = new Set((data || []).map(d => (d.address || '').trim().toLowerCase()).filter(Boolean));
-    return rows.map(r => ({
-      ...r,
-      _dup: r.permit_number ? existingPermits.has(r.permit_number) : existingAddrs.has(r.address.trim().toLowerCase()),
-    }));
+    const existing = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase.from("leads")
+        .select("audience,name,address,permit_number")
+        .eq("audience", activeAudience)
+        .order("created_at", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error("Could not compare imported leads with saved records.");
+      existing.push(...(data || []));
+      if ((data || []).length < pageSize) break;
+    }
+    return flagDuplicateImportRows(rows, existing, activeAudience);
   }
 
   async function normalizeRows(rawRows) {
@@ -268,11 +275,18 @@ export default function LeadsPage() {
       return;
     }
     setUploadStatus({ type: 'info', text: 'Checking for duplicates already in your leads…' });
-    const checked = await flagDuplicates(rows);
+    let checked;
+    try {
+      checked = await flagDuplicates(rows);
+    } catch (error) {
+      setUploadStatus({ type: 'err', text: error.message || 'Duplicate check failed. Nothing was imported.' });
+      setBulkRows([]);
+      return;
+    }
     const dupCount = checked.filter(r => r._dup).length;
     setUploadStatus({
       type: 'ok',
-      text: `${checked.length} row${checked.length === 1 ? '' : 's'} loaded` +
+      text: `${checked.length} row${checked.length === 1 ? '' : 's'} loaded` + (rawRows.length > 100 ? ' (first 100 of '+rawRows.length+' source rows)' : '') +
         (dupCount ? ` — ${dupCount} already in your leads and will be skipped.` : ', all new.'),
     });
     setBulkRows(checked);
